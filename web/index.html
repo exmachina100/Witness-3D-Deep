@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Witness 3D Push/Pull</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="./src/app/app.css">
+</head>
+<body>
+<div id="app"></div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/",
+    "replicad-opencascadejs": "https://cdn.jsdelivr.net/npm/replicad-opencascadejs@1.1.0/dist/replicad_single.js",
+    "@anthropic-ai/sdk": "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0/+esm"
+  }
+}
+</script>
+<script type="module">
+import { loadKernel } from './src/Kernel.js';
+import { LocalBackend } from './src/app/LocalBackend.js';
+import { mount } from './src/app/App.js';
+
+// OpenCascade compiled to WebAssembly, shipped gzipped next to the page (occ.gz.wasm holds gzip bytes).
+async function bootKernel() {
+  try {
+    const res = await fetch('./occ.gz.wasm');
+    if (!res.ok) throw new Error(res.status);
+    // Some hosts decode gzip on the way; only decompress if the bytes are still gzipped.
+    const raw = await res.arrayBuffer();
+    const gz = new Uint8Array(raw, 0, 2);
+    const wasmBinary = gz[0] === 0x1f && gz[1] === 0x8b
+      ? await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+      : raw;
+    await loadKernel({ wasmBinary });
+  } catch {
+    await loadKernel(); // local dev: let the loader fetch its own .wasm
+  }
+}
+
+document.getElementById('app').innerHTML = '<div class="loading" style="position:fixed">LOADING THE OPENCASCADE KERNEL (7 MB)…</div>';
+await bootKernel();
+const app = await mount(document.getElementById('app'), new LocalBackend());
+window.__w3d = app;
+</script>
+</body>
+</html>
